@@ -1,7 +1,10 @@
 package com.mocode.jobtracker.ui.addapplication
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,8 +16,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -24,32 +30,34 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mocode.jobtracker.domain.model.ApplicationStatus
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddApplicationScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    viewModel: AddEditApplicationViewModel
 ) {
-    var companyName by remember { mutableStateOf("") }
-    var position by remember { mutableStateOf("") }
-    var jobUrl by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var salary by remember { mutableStateOf("") }
-    var appliedDate by remember { mutableStateOf("2026-10-04") }
-    var selectedStatus by remember { mutableStateOf(ApplicationStatus.APPLIED) }
-    var generalNotes by remember { mutableStateOf("") }
+    val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(uiState.isSaved) {
+        if (uiState.isSaved) {
+            onNavigateBack()
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("New Application") },
+                title = {
+                    Text(if (uiState.isEditMode) "Edit Application" else "New Application")
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -64,119 +72,239 @@ fun AddApplicationScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = "Job Details",
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            OutlinedTextField(
-                value = companyName,
-                onValueChange = { companyName = it },
-                label = { Text("Company Name *") },
-                placeholder = { Text("e.g. Google, Line Man, Shopee") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = position,
-                onValueChange = { position = it },
-                label = { Text("Position *") },
-                placeholder = { Text("e.g. Android Engineer, Backend Developer") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = jobUrl,
-                onValueChange = { jobUrl = it },
-                label = { Text("Job URL (Optional)") },
-                placeholder = { Text("https://...") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
             ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Job Information",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
                 OutlinedTextField(
-                    value = location,
-                    onValueChange = { location = it },
-                    label = { Text("Location") },
-                    placeholder = { Text("e.g. Bangkok / Remote") },
-                    modifier = Modifier.weight(1f),
+                    value = uiState.companyName,
+                    onValueChange = viewModel::onCompanyNameChanged,
+                    label = { Text("Company Name *") },
+                    placeholder = { Text("e.g. Google, Line, Shopee") },
+                    isError = uiState.companyNameError != null,
+                    supportingText = uiState.companyNameError?.let { { Text(it) } },
+                    modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
 
                 OutlinedTextField(
-                    value = salary,
-                    onValueChange = { salary = it },
-                    label = { Text("Salary") },
-                    placeholder = { Text("e.g. 50k - 70k THB") },
-                    modifier = Modifier.weight(1f),
+                    value = uiState.position,
+                    onValueChange = viewModel::onPositionChanged,
+                    label = { Text("Position *") },
+                    placeholder = { Text("e.g. Android Engineer") },
+                    isError = uiState.positionError != null,
+                    supportingText = uiState.positionError?.let { { Text(it) } },
+                    modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
-            }
 
-            OutlinedTextField(
-                value = appliedDate,
-                onValueChange = { appliedDate = it },
-                label = { Text("Applied Date *") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Text(
-                text = "Status",
-                style = MaterialTheme.typography.bodyLarge
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = selectedStatus == ApplicationStatus.APPLIED,
-                    onClick = { selectedStatus = ApplicationStatus.APPLIED },
-                    label = { Text("Applied") }
+                OutlinedTextField(
+                    value = uiState.jobUrl,
+                    onValueChange = viewModel::onJobUrlChanged,
+                    label = { Text("Job URL (Optional)") },
+                    placeholder = { Text("https://...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
-                FilterChip(
-                    selected = selectedStatus == ApplicationStatus.WISHLIST,
-                    onClick = { selectedStatus = ApplicationStatus.WISHLIST },
-                    label = { Text("Wishlist") }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = uiState.location,
+                        onValueChange = viewModel::onLocationChanged,
+                        label = { Text("Location") },
+                        placeholder = { Text("e.g. Bangkok / Remote") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = uiState.salary,
+                        onValueChange = viewModel::onSalaryChanged,
+                        label = { Text("Salary") },
+                        placeholder = { Text("e.g. 50k - 70k THB") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                OutlinedTextField(
+                    value = uiState.appliedDate,
+                    onValueChange = viewModel::onAppliedDateChanged,
+                    label = { Text("Applied Date *") },
+                    placeholder = { Text("YYYY-MM-DD") },
+                    isError = uiState.appliedDateError != null,
+                    supportingText = uiState.appliedDateError?.let { { Text(it) } },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
-                FilterChip(
-                    selected = selectedStatus == ApplicationStatus.INTERVIEW,
-                    onClick = { selectedStatus = ApplicationStatus.INTERVIEW },
-                    label = { Text("Interview") }
+
+                Text(
+                    text = "Application Status *",
+                    style = MaterialTheme.typography.bodyLarge
                 )
-            }
 
-            OutlinedTextField(
-                value = generalNotes,
-                onValueChange = { generalNotes = it },
-                label = { Text("General Notes") },
-                placeholder = { Text("Add any notes, contact info, or thoughts...") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3
-            )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    ApplicationStatus.entries.forEach { status ->
+                        FilterChip(
+                            selected = uiState.status == status,
+                            onClick = { viewModel.onStatusChanged(status) },
+                            label = { Text(status.displayName) }
+                        )
+                    }
+                }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            Button(
-                onClick = onNavigateBack,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Save Application")
+                // Interview Section
+                Text(
+                    text = "Interview Information (Optional)",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = uiState.interviewDate,
+                                onValueChange = viewModel::onInterviewDateChanged,
+                                label = { Text("Interview Date") },
+                                placeholder = { Text("YYYY-MM-DD") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = uiState.interviewTime,
+                                onValueChange = viewModel::onInterviewTimeChanged,
+                                label = { Text("Time") },
+                                placeholder = { Text("14:00") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = uiState.interviewRound,
+                                onValueChange = viewModel::onInterviewRoundChanged,
+                                label = { Text("Round") },
+                                placeholder = { Text("HR / Technical / Final") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = uiState.interviewType,
+                                onValueChange = viewModel::onInterviewTypeChanged,
+                                label = { Text("Type") },
+                                placeholder = { Text("Online / On-site") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = uiState.interviewNotes,
+                            onValueChange = viewModel::onInterviewNotesChanged,
+                            label = { Text("Interview Notes") },
+                            placeholder = { Text("Notes, interviewer names, topics to prepare...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // Follow-up Section
+                Text(
+                    text = "Follow-up Reminder (Optional)",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = uiState.followUpDate,
+                            onValueChange = viewModel::onFollowUpDateChanged,
+                            label = { Text("Follow-up Date") },
+                            placeholder = { Text("YYYY-MM-DD") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = uiState.followUpNote,
+                            onValueChange = viewModel::onFollowUpNoteChanged,
+                            label = { Text("Follow-up Note") },
+                            placeholder = { Text("e.g. Email HR if no update by Friday") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // General Notes Section
+                Text(
+                    text = "General Notes",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                OutlinedTextField(
+                    value = uiState.generalNotes,
+                    onValueChange = viewModel::onGeneralNotesChanged,
+                    label = { Text("Notes") },
+                    placeholder = { Text("Any general thoughts, contact person, or referral info...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = viewModel::saveApplication,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (uiState.isEditMode) "Save Changes" else "Save Application")
+                }
             }
         }
     }

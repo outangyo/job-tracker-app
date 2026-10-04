@@ -14,7 +14,16 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
     object Settings : Screen("settings", "Settings", Icons.Default.Settings)
 
     // Secondary destinations
-    object AddApplication : Screen("add_application", "New Application")
+    object AddApplication : Screen("add_edit_application?applicationId={applicationId}", "Application Form") {
+        const val ARG_APPLICATION_ID = "applicationId"
+        fun createRoute(applicationId: Long? = null): String {
+            return if (applicationId != null && applicationId > 0) {
+                "add_edit_application?applicationId=$applicationId"
+            } else {
+                "add_edit_application"
+            }
+        }
+    }
     object ApplicationDetail : Screen("application_detail/{applicationId}", "Application Detail") {
         const val ARG_APPLICATION_ID = "applicationId"
         fun createRoute(applicationId: Long): String = "application_detail/$applicationId"
