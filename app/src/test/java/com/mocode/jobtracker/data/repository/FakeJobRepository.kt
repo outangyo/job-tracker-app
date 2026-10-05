@@ -58,6 +58,10 @@ class FakeJobRepository : JobRepository {
         return timelineEventsFlow.value.filter { it.applicationId == applicationId }
     }
 
+    override fun getAllTimelineEvents(): Flow<List<TimelineEvent>> = timelineEventsFlow
+
+    override suspend fun getAllTimelineEventsOnce(): List<TimelineEvent> = timelineEventsFlow.value
+
     override suspend fun insertTimelineEvent(event: TimelineEvent): Long {
         val id = if (event.id > 0) event.id else nextEventId++
         val newEvent = event.copy(id = id)

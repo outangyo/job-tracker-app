@@ -200,4 +200,48 @@ class TimelineEventDaoTest {
         assertEquals("2026-10-05", afterUpdate.eventDate)
         assertEquals("Submitted assignment on GitHub", afterUpdate.note)
     }
+
+    @Test
+    fun getAllTimelineEvents_returnsAllEventsOrderedByDateDesc() = runTest {
+        val app1 = ApplicationEntity(companyName = "App1", position = "P1", appliedDate = "2026-10-01")
+        val app2 = ApplicationEntity(companyName = "App2", position = "P2", appliedDate = "2026-10-01")
+        val app1Id = applicationDao.insert(app1)
+        val app2Id = applicationDao.insert(app2)
+
+        timelineEventDao.insert(
+            TimelineEventEntity(
+                applicationId = app1Id,
+                eventType = TimelineEventType.APPLIED,
+                eventDate = "2026-10-01",
+                createdAt = 1000L
+            )
+        )
+        timelineEventDao.insert(
+            TimelineEventEntity(
+                applicationId = app2Id,
+                eventType = TimelineEventType.OFFER_RECEIVED,
+                eventDate = "2026-10-10",
+                createdAt = 2000L
+            )
+        )
+        timelineEventDao.insert(
+            TimelineEventEntity(
+                applicationId = app1Id,
+                eventType = TimelineEventType.INTERVIEW_SCHEDULED,
+                eventDate = "2026-10-05",
+                createdAt = 1500L
+            )
+        )
+
+        val allEvents = timelineEventDao.getAllTimelineEventsOnce()
+        assertEquals(3, allEvents.size)
+        // Ordered eventDate DESC: 2026-10-10, 2026-10-05, 2026-10-01
+        assertEquals("2026-10-10", allEvents[0].eventDate)
+        assertEquals("2026-10-05", allEvents[1].eventDate)
+        assertEquals("2026-10-01", allEvents[2].eventDate)
+
+        val allEventsFromFlow = timelineEventDao.getAllTimelineEvents().first()
+        assertEquals(3, allEventsFromFlow.size)
+        assertEquals("2026-10-10", allEventsFromFlow[0].eventDate)
+    }
 }

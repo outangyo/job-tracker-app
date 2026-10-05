@@ -56,6 +56,16 @@ class RoomJobRepository(
         return timelineEventDao.getEventsForApplicationOnce(applicationId).map { it.toDomain() }
     }
 
+    override fun getAllTimelineEvents(): Flow<List<TimelineEvent>> {
+        return timelineEventDao.getAllTimelineEvents().map { list ->
+            list.map { it.toDomain() }
+        }
+    }
+
+    override suspend fun getAllTimelineEventsOnce(): List<TimelineEvent> {
+        return timelineEventDao.getAllTimelineEventsOnce().map { it.toDomain() }
+    }
+
     override suspend fun insertTimelineEvent(event: TimelineEvent): Long {
         return timelineEventDao.insert(event.toEntity())
     }

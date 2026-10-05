@@ -20,6 +20,8 @@ interface JobRepository {
     // Timeline Events
     fun getTimelineEvents(applicationId: Long): Flow<List<TimelineEvent>>
     suspend fun getTimelineEventsOnce(applicationId: Long): List<TimelineEvent>
+    fun getAllTimelineEvents(): Flow<List<TimelineEvent>>
+    suspend fun getAllTimelineEventsOnce(): List<TimelineEvent>
     suspend fun insertTimelineEvent(event: TimelineEvent): Long
     suspend fun updateTimelineEvent(event: TimelineEvent)
     suspend fun deleteTimelineEvent(event: TimelineEvent)

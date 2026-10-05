@@ -177,4 +177,23 @@ class RoomJobRepositoryTest {
         assertEquals("Design System Interview", afterUpdate.customTitle)
         assertEquals("Walkthrough with staff designer", afterUpdate.note)
     }
+
+    @Test
+    fun repository_getAllTimelineEvents_observesFlow() = runTest {
+        val app1Id = repository.insertApplication(Application(companyName = "A1", position = "P1", appliedDate = "2026-10-01"))
+        val app2Id = repository.insertApplication(Application(companyName = "A2", position = "P2", appliedDate = "2026-10-01"))
+
+        repository.insertTimelineEvent(
+            TimelineEvent(applicationId = app1Id, eventType = TimelineEventType.APPLIED, eventDate = "2026-10-01")
+        )
+        repository.insertTimelineEvent(
+            TimelineEvent(applicationId = app2Id, eventType = TimelineEventType.OFFER_RECEIVED, eventDate = "2026-10-12")
+        )
+
+        val events = repository.getAllTimelineEvents().first()
+        assertEquals(2, events.size)
+        // Ordered newest first
+        assertEquals("2026-10-12", events[0].eventDate)
+        assertEquals(TimelineEventType.OFFER_RECEIVED, events[0].eventType)
+    }
 }

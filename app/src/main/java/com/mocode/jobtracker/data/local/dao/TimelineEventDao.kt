@@ -18,6 +18,12 @@ interface TimelineEventDao {
     @Query("SELECT * FROM timeline_events WHERE applicationId = :applicationId ORDER BY createdAt ASC")
     suspend fun getEventsForApplicationOnce(applicationId: Long): List<TimelineEventEntity>
 
+    @Query("SELECT * FROM timeline_events ORDER BY eventDate DESC, createdAt DESC, id DESC")
+    fun getAllTimelineEvents(): Flow<List<TimelineEventEntity>>
+
+    @Query("SELECT * FROM timeline_events ORDER BY eventDate DESC, createdAt DESC, id DESC")
+    suspend fun getAllTimelineEventsOnce(): List<TimelineEventEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(event: TimelineEventEntity): Long
 
