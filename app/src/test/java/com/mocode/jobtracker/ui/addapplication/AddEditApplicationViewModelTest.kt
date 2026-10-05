@@ -115,4 +115,71 @@ class AddEditApplicationViewModelTest {
         val events = repository.getTimelineEvents(originalAppId).first()
         assertTrue(events.any { it.eventType == TimelineEventType.INTERVIEW_SCHEDULED })
     }
+
+    @Test
+    fun inputFields_truncateWhenExceedingMaxLength() = runTest(testDispatcher) {
+        val viewModel = AddEditApplicationViewModel(repository, SavedStateHandle())
+
+        // Company Name max: 100
+        val longCompany = "A".repeat(150)
+        viewModel.onCompanyNameChanged(longCompany)
+        assertEquals(100, viewModel.uiState.value.companyName.length)
+
+        // Position max: 150
+        val longPosition = "B".repeat(200)
+        viewModel.onPositionChanged(longPosition)
+        assertEquals(150, viewModel.uiState.value.position.length)
+
+        // Location max: 150
+        val longLocation = "C".repeat(200)
+        viewModel.onLocationChanged(longLocation)
+        assertEquals(150, viewModel.uiState.value.location.length)
+
+        // Salary max: 100
+        val longSalary = "D".repeat(120)
+        viewModel.onSalaryChanged(longSalary)
+        assertEquals(100, viewModel.uiState.value.salary.length)
+
+        // Job URL max: 500
+        val longUrl = "https://example.com/" + "x".repeat(600)
+        viewModel.onJobUrlChanged(longUrl)
+        assertEquals(500, viewModel.uiState.value.jobUrl.length)
+
+        // Interview Notes max: 1000
+        val longInterviewNotes = "E".repeat(1200)
+        viewModel.onInterviewNotesChanged(longInterviewNotes)
+        assertEquals(1000, viewModel.uiState.value.interviewNotes.length)
+
+        // Follow-up Note max: 1000
+        val longFollowUpNote = "F".repeat(1200)
+        viewModel.onFollowUpNoteChanged(longFollowUpNote)
+        assertEquals(1000, viewModel.uiState.value.followUpNote.length)
+
+        // General Notes max: 2000
+        val longGeneralNotes = "G".repeat(2500)
+        viewModel.onGeneralNotesChanged(longGeneralNotes)
+        assertEquals(2000, viewModel.uiState.value.generalNotes.length)
+    }
+
+    @Test
+    fun dateChangeHandlers_updateStateCorrectly() = runTest(testDispatcher) {
+        val viewModel = AddEditApplicationViewModel(repository, SavedStateHandle())
+
+        viewModel.onAppliedDateChanged("2026-10-10")
+        assertEquals("2026-10-10", viewModel.uiState.value.appliedDate)
+
+        viewModel.onInterviewDateChanged("2026-10-15")
+        assertEquals("2026-10-15", viewModel.uiState.value.interviewDate)
+
+        viewModel.onFollowUpDateChanged("2026-10-20")
+        assertEquals("2026-10-20", viewModel.uiState.value.followUpDate)
+
+        // Clear optional dates
+        viewModel.onInterviewDateChanged("")
+        assertEquals("", viewModel.uiState.value.interviewDate)
+
+        viewModel.onFollowUpDateChanged("")
+        assertEquals("", viewModel.uiState.value.followUpDate)
+    }
 }
+

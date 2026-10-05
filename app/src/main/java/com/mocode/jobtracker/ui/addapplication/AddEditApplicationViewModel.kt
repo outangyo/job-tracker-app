@@ -96,24 +96,38 @@ class AddEditApplicationViewModel(
         }
     }
 
+    companion object {
+        const val MAX_COMPANY_NAME_LENGTH = 100
+        const val MAX_POSITION_LENGTH = 150
+        const val MAX_LOCATION_LENGTH = 150
+        const val MAX_SALARY_LENGTH = 100
+        const val MAX_JOB_URL_LENGTH = 500
+        const val MAX_INTERVIEW_ROUND_LENGTH = 50
+        const val MAX_INTERVIEW_TYPE_LENGTH = 50
+        const val MAX_INTERVIEW_TIME_LENGTH = 20
+        const val MAX_INTERVIEW_NOTES_LENGTH = 1000
+        const val MAX_FOLLOW_UP_NOTE_LENGTH = 1000
+        const val MAX_GENERAL_NOTES_LENGTH = 2000
+    }
+
     fun onCompanyNameChanged(name: String) {
-        _uiState.update { it.copy(companyName = name, companyNameError = null) }
+        _uiState.update { it.copy(companyName = name.take(MAX_COMPANY_NAME_LENGTH), companyNameError = null) }
     }
 
     fun onPositionChanged(pos: String) {
-        _uiState.update { it.copy(position = pos, positionError = null) }
+        _uiState.update { it.copy(position = pos.take(MAX_POSITION_LENGTH), positionError = null) }
     }
 
     fun onJobUrlChanged(url: String) {
-        _uiState.update { it.copy(jobUrl = url) }
+        _uiState.update { it.copy(jobUrl = url.take(MAX_JOB_URL_LENGTH)) }
     }
 
     fun onLocationChanged(loc: String) {
-        _uiState.update { it.copy(location = loc) }
+        _uiState.update { it.copy(location = loc.take(MAX_LOCATION_LENGTH)) }
     }
 
     fun onSalaryChanged(sal: String) {
-        _uiState.update { it.copy(salary = sal) }
+        _uiState.update { it.copy(salary = sal.take(MAX_SALARY_LENGTH)) }
     }
 
     fun onAppliedDateChanged(date: String) {
@@ -129,19 +143,19 @@ class AddEditApplicationViewModel(
     }
 
     fun onInterviewTimeChanged(time: String) {
-        _uiState.update { it.copy(interviewTime = time) }
+        _uiState.update { it.copy(interviewTime = time.take(MAX_INTERVIEW_TIME_LENGTH)) }
     }
 
     fun onInterviewRoundChanged(round: String) {
-        _uiState.update { it.copy(interviewRound = round) }
+        _uiState.update { it.copy(interviewRound = round.take(MAX_INTERVIEW_ROUND_LENGTH)) }
     }
 
     fun onInterviewTypeChanged(type: String) {
-        _uiState.update { it.copy(interviewType = type) }
+        _uiState.update { it.copy(interviewType = type.take(MAX_INTERVIEW_TYPE_LENGTH)) }
     }
 
     fun onInterviewNotesChanged(notes: String) {
-        _uiState.update { it.copy(interviewNotes = notes) }
+        _uiState.update { it.copy(interviewNotes = notes.take(MAX_INTERVIEW_NOTES_LENGTH)) }
     }
 
     fun onFollowUpDateChanged(date: String) {
@@ -149,11 +163,11 @@ class AddEditApplicationViewModel(
     }
 
     fun onFollowUpNoteChanged(note: String) {
-        _uiState.update { it.copy(followUpNote = note) }
+        _uiState.update { it.copy(followUpNote = note.take(MAX_FOLLOW_UP_NOTE_LENGTH)) }
     }
 
     fun onGeneralNotesChanged(notes: String) {
-        _uiState.update { it.copy(generalNotes = notes) }
+        _uiState.update { it.copy(generalNotes = notes.take(MAX_GENERAL_NOTES_LENGTH)) }
     }
 
     fun saveApplication() {

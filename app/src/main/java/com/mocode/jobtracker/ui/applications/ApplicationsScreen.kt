@@ -11,16 +11,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -37,6 +44,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -52,6 +62,7 @@ fun ApplicationsScreen(
     viewModel: ApplicationsViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var sortMenuExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -86,36 +97,119 @@ fun ApplicationsScreen(
                 },
                 trailingIcon = {
                     if (uiState.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                            Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear")
+                        IconButton(onClick = viewModel::clearSearch) {
+                            Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear search")
                         }
                     }
                 },
                 singleLine = true
             )
 
-            // Status Filter Chips
+            // Status Filter Chips (Multi-select)
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // "All" Reset Chip
                 item {
+                    val isAllActive = uiState.selectedStatuses.isEmpty()
                     FilterChip(
-                        selected = uiState.selectedStatus == null,
-                        onClick = { viewModel.onStatusFilterSelected(null) },
-                        label = { Text("All") }
+                        selected = isAllActive,
+                        onClick = viewModel::onAllStatusSelected,
+                        label = { Text("All") },
+                        leadingIcon = if (isAllActive) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        } else null
                     )
                 }
+
+                // Individual Status Chips
                 items(ApplicationStatus.entries) { status ->
+                    val isSelected = status in uiState.selectedStatuses
                     FilterChip(
-                        selected = uiState.selectedStatus == status,
-                        onClick = { viewModel.onStatusFilterSelected(status) },
-                        label = { Text(status.displayName) }
+                        selected = isSelected,
+                        onClick = { viewModel.onStatusToggled(status) },
+                        label = { Text(status.displayName) },
+                        leadingIcon = if (isSelected) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        } else null
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            // Controls Bar: Results Count + Sort Dropdown
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${uiState.applications.size} applications",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Box {
+                    AssistChip(
+                        onClick = { sortMenuExpanded = true },
+                        label = { Text(uiState.sortOption.displayName) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Sort,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Choose sort option",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    )
+
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false }
+                    ) {
+                        ApplicationSortOption.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.displayName) },
+                                onClick = {
+                                    viewModel.onSortOptionSelected(option)
+                                    sortMenuExpanded = false
+                                },
+                                leadingIcon = if (uiState.sortOption == option) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else null
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Body Content based on state
             if (uiState.isLoading) {
@@ -166,18 +260,18 @@ fun ApplicationsScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = "No applications match your search",
+                            text = "No matching applications",
                             style = MaterialTheme.typography.titleMedium,
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Try adjusting your search query or selecting a different status filter.",
+                            text = "Try adjusting your search query or status filters.",
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        OutlinedButton(onClick = viewModel::clearFilters) {
-                            Text("Clear Filters")
+                        OutlinedButton(onClick = viewModel::clearFiltersAndSearch) {
+                            Text("Clear Filters & Search")
                         }
                     }
                 }

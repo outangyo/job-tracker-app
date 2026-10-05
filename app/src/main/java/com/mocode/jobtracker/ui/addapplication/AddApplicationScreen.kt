@@ -15,9 +15,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -27,16 +31,30 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mocode.jobtracker.domain.model.ApplicationStatus
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+
+private enum class DateField {
+    APPLIED,
+    INTERVIEW,
+    FOLLOW_UP
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -45,11 +63,32 @@ fun AddApplicationScreen(
     viewModel: AddEditApplicationViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var activeDateField by remember { mutableStateOf<DateField?>(null) }
 
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) {
             onNavigateBack()
         }
+    }
+
+    activeDateField?.let { field ->
+        val currentDate = when (field) {
+            DateField.APPLIED -> uiState.appliedDate
+            DateField.INTERVIEW -> uiState.interviewDate
+            DateField.FOLLOW_UP -> uiState.followUpDate
+        }
+        AppDatePickerDialog(
+            initialDate = currentDate,
+            onDateSelected = { selectedDate ->
+                when (field) {
+                    DateField.APPLIED -> viewModel.onAppliedDateChanged(selectedDate)
+                    DateField.INTERVIEW -> viewModel.onInterviewDateChanged(selectedDate)
+                    DateField.FOLLOW_UP -> viewModel.onFollowUpDateChanged(selectedDate)
+                }
+                activeDateField = null
+            },
+            onDismiss = { activeDateField = null }
+        )
     }
 
     Scaffold(
@@ -156,6 +195,14 @@ fun AddApplicationScreen(
                     placeholder = { Text("YYYY-MM-DD") },
                     isError = uiState.appliedDateError != null,
                     supportingText = uiState.appliedDateError?.let { { Text(it) } },
+                    trailingIcon = {
+                        IconButton(onClick = { activeDateField = DateField.APPLIED }) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = "Select applied date"
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -202,6 +249,24 @@ fun AddApplicationScreen(
                                 onValueChange = viewModel::onInterviewDateChanged,
                                 label = { Text("Interview Date") },
                                 placeholder = { Text("YYYY-MM-DD") },
+                                trailingIcon = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (uiState.interviewDate.isNotEmpty()) {
+                                            IconButton(onClick = { viewModel.onInterviewDateChanged("") }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Clear,
+                                                    contentDescription = "Clear interview date"
+                                                )
+                                            }
+                                        }
+                                        IconButton(onClick = { activeDateField = DateField.INTERVIEW }) {
+                                            Icon(
+                                                imageVector = Icons.Default.CalendarToday,
+                                                contentDescription = "Select interview date"
+                                            )
+                                        }
+                                    }
+                                },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true
                             )
@@ -267,6 +332,24 @@ fun AddApplicationScreen(
                             onValueChange = viewModel::onFollowUpDateChanged,
                             label = { Text("Follow-up Date") },
                             placeholder = { Text("YYYY-MM-DD") },
+                            trailingIcon = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (uiState.followUpDate.isNotEmpty()) {
+                                        IconButton(onClick = { viewModel.onFollowUpDateChanged("") }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Clear,
+                                                contentDescription = "Clear follow-up date"
+                                            )
+                                        }
+                                    }
+                                    IconButton(onClick = { activeDateField = DateField.FOLLOW_UP }) {
+                                        Icon(
+                                            imageVector = Icons.Default.CalendarToday,
+                                            contentDescription = "Select follow-up date"
+                                        )
+                                    }
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
@@ -309,3 +392,55 @@ fun AddApplicationScreen(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppDatePickerDialog(
+    initialDate: String?,
+    onDateSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val initialMillis = remember(initialDate) {
+        try {
+            if (!initialDate.isNullOrBlank()) {
+                val parsed = LocalDate.parse(initialDate.trim())
+                parsed.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+            } else {
+                LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+            }
+        } catch (_: Exception) {
+            LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        }
+    }
+
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = initialMillis
+    )
+
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val selectedDate = Instant.ofEpochMilli(millis)
+                            .atZone(ZoneOffset.UTC)
+                            .toLocalDate()
+                        onDateSelected(selectedDate.toString())
+                    }
+                    onDismiss()
+                }
+            ) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    ) {
+        DatePicker(state = datePickerState)
+    }
+}
+
