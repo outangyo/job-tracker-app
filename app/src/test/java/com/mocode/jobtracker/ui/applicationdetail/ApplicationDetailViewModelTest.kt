@@ -113,4 +113,84 @@ class ApplicationDetailViewModelTest {
         assertTrue(viewModel.uiState.value.isDeleted)
         assertNull(repository.getApplicationByIdOnce(appId))
     }
+
+    @Test
+    fun detailViewModel_withAllOptionalFieldsPopulated_loadsCorrectly() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Google",
+                position = "Android Staff Engineer",
+                jobUrl = "https://careers.google.com/jobs/123",
+                location = "Bangkok, Thailand",
+                salary = "200k THB",
+                appliedDate = "2026-10-01",
+                status = ApplicationStatus.INTERVIEW,
+                interviewDate = "2026-10-15",
+                interviewTime = "14:00",
+                interviewRound = "Technical",
+                interviewType = "Online",
+                interviewNotes = "Prepare system design",
+                followUpDate = "2026-10-20",
+                followUpNote = "Email recruiter",
+                generalNotes = "Referred by John"
+            )
+        )
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.ApplicationDetail.ARG_APPLICATION_ID to appId))
+        val viewModel = ApplicationDetailViewModel(repository, savedStateHandle)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testScheduler.advanceUntilIdle()
+
+        val app = viewModel.uiState.value.application
+        assertNotNull(app)
+        assertEquals("Google", app?.companyName)
+        assertEquals("https://careers.google.com/jobs/123", app?.jobUrl)
+        assertEquals("Bangkok, Thailand", app?.location)
+        assertEquals("200k THB", app?.salary)
+        assertEquals("2026-10-15", app?.interviewDate)
+        assertEquals("14:00", app?.interviewTime)
+        assertEquals("Technical", app?.interviewRound)
+        assertEquals("Online", app?.interviewType)
+        assertEquals("Prepare system design", app?.interviewNotes)
+        assertEquals("2026-10-20", app?.followUpDate)
+        assertEquals("Email recruiter", app?.followUpNote)
+        assertEquals("Referred by John", app?.generalNotes)
+    }
+
+    @Test
+    fun detailViewModel_withOptionalFieldsEmpty_loadsCleanly() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Minimal Co",
+                position = "Developer",
+                appliedDate = "2026-10-01",
+                status = ApplicationStatus.APPLIED
+            )
+        )
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.ApplicationDetail.ARG_APPLICATION_ID to appId))
+        val viewModel = ApplicationDetailViewModel(repository, savedStateHandle)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testScheduler.advanceUntilIdle()
+
+        val app = viewModel.uiState.value.application
+        assertNotNull(app)
+        assertEquals("Minimal Co", app?.companyName)
+        assertNull(app?.jobUrl)
+        assertNull(app?.location)
+        assertNull(app?.salary)
+        assertNull(app?.interviewDate)
+        assertNull(app?.interviewTime)
+        assertNull(app?.interviewRound)
+        assertNull(app?.interviewType)
+        assertNull(app?.interviewNotes)
+        assertNull(app?.followUpDate)
+        assertNull(app?.followUpNote)
+        assertNull(app?.generalNotes)
+    }
 }
+

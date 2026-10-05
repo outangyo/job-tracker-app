@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -44,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mocode.jobtracker.domain.model.ApplicationStatus
 import java.time.Instant
@@ -273,33 +275,67 @@ fun AddApplicationScreen(
                             OutlinedTextField(
                                 value = uiState.interviewTime,
                                 onValueChange = viewModel::onInterviewTimeChanged,
-                                label = { Text("Time") },
+                                label = { Text("Time (Optional)") },
                                 placeholder = { Text("14:00") },
+                                trailingIcon = if (uiState.interviewTime.isNotEmpty()) {
+                                    {
+                                        IconButton(onClick = { viewModel.onInterviewTimeChanged("") }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Clear,
+                                                contentDescription = "Clear time"
+                                            )
+                                        }
+                                    }
+                                } else null,
                                 modifier = Modifier.weight(1f),
                                 singleLine = true
                             )
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = uiState.interviewRound,
                                 onValueChange = viewModel::onInterviewRoundChanged,
-                                label = { Text("Round") },
-                                placeholder = { Text("HR / Technical / Final") },
-                                modifier = Modifier.weight(1f),
+                                label = { Text("Round (Optional)") },
+                                placeholder = { Text("e.g. HR / Technical / Final") },
+                                modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf("HR", "Technical", "Final", "Other").forEach { round ->
+                                    SuggestionChip(
+                                        onClick = { viewModel.onInterviewRoundChanged(round) },
+                                        label = { Text(round, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                            }
+                        }
+
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = uiState.interviewType,
                                 onValueChange = viewModel::onInterviewTypeChanged,
-                                label = { Text("Type") },
-                                placeholder = { Text("Online / On-site") },
-                                modifier = Modifier.weight(1f),
+                                label = { Text("Type (Optional)") },
+                                placeholder = { Text("e.g. Online / On-site / Phone") },
+                                modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf("Online", "On-site", "Phone", "Other").forEach { type ->
+                                    SuggestionChip(
+                                        onClick = { viewModel.onInterviewTypeChanged(type) },
+                                        label = { Text(type, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                            }
                         }
 
                         OutlinedTextField(
@@ -307,6 +343,13 @@ fun AddApplicationScreen(
                             onValueChange = viewModel::onInterviewNotesChanged,
                             label = { Text("Interview Notes") },
                             placeholder = { Text("Notes, interviewer names, topics to prepare...") },
+                            supportingText = {
+                                Text(
+                                    text = "${uiState.interviewNotes.length}/${AddEditApplicationViewModel.MAX_INTERVIEW_NOTES_LENGTH}",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.End
+                                )
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             minLines = 2
                         )
@@ -358,6 +401,13 @@ fun AddApplicationScreen(
                             onValueChange = viewModel::onFollowUpNoteChanged,
                             label = { Text("Follow-up Note") },
                             placeholder = { Text("e.g. Email HR if no update by Friday") },
+                            supportingText = {
+                                Text(
+                                    text = "${uiState.followUpNote.length}/${AddEditApplicationViewModel.MAX_FOLLOW_UP_NOTE_LENGTH}",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.End
+                                )
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             minLines = 2
                         )
@@ -376,6 +426,13 @@ fun AddApplicationScreen(
                     onValueChange = viewModel::onGeneralNotesChanged,
                     label = { Text("Notes") },
                     placeholder = { Text("Any general thoughts, contact person, or referral info...") },
+                    supportingText = {
+                        Text(
+                            text = "${uiState.generalNotes.length}/${AddEditApplicationViewModel.MAX_GENERAL_NOTES_LENGTH}",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3
                 )

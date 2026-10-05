@@ -1,5 +1,9 @@
 package com.mocode.jobtracker.ui.applicationdetail
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,15 +13,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -40,6 +49,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,6 +62,7 @@ fun ApplicationDetailScreen(
     viewModel: ApplicationDetailViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(uiState.isDeleted) {
         if (uiState.isDeleted) {
@@ -143,7 +156,7 @@ fun ApplicationDetailScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Main Job Info Card
+                // 1. Main Job Information Card
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
@@ -170,15 +183,46 @@ fun ApplicationDetailScreen(
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
                         if (!app.location.isNullOrBlank()) {
-                            Text(text = "Location: ${app.location}", style = MaterialTheme.typography.bodyMedium)
+                            Text(text = "📍 ${app.location}", style = MaterialTheme.typography.bodyMedium)
                         }
                         if (!app.salary.isNullOrBlank()) {
-                            Text(text = "Salary: ${app.salary}", style = MaterialTheme.typography.bodyMedium)
+                            Text(text = "💰 ${app.salary}", style = MaterialTheme.typography.bodyMedium)
                         }
+
+                        // Job URL UX: visually identifiable link + external browser open action
                         if (!app.jobUrl.isNullOrBlank()) {
-                            Text(text = "URL: ${app.jobUrl}", style = MaterialTheme.typography.bodyMedium)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { openJobUrl(context, app.jobUrl) },
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = app.jobUrl,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textDecoration = TextDecoration.Underline,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { openJobUrl(context, app.jobUrl) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                        contentDescription = "Open Job Posting URL",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
+
                         Text(
                             text = "Applied Date: ${app.appliedDate}",
                             style = MaterialTheme.typography.bodySmall,
@@ -187,31 +231,59 @@ fun ApplicationDetailScreen(
                     }
                 }
 
-                // Interview Section Card (if available)
-                if (!app.interviewDate.isNullOrBlank() || !app.interviewNotes.isNullOrBlank()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                // 2. Interview Details Card (with clean empty state)
+                val hasInterview = !app.interviewDate.isNullOrBlank() ||
+                    !app.interviewTime.isNullOrBlank() ||
+                    !app.interviewRound.isNullOrBlank() ||
+                    !app.interviewType.isNullOrBlank() ||
+                    !app.interviewNotes.isNullOrBlank()
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = if (hasInterview) {
+                        CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                    } else {
+                        CardDefaults.cardColors()
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Event, contentDescription = null)
-                                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                                Text(text = "Interview Details", style = MaterialTheme.typography.titleMedium)
-                            }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Event, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text(text = "Interview Details", style = MaterialTheme.typography.titleMedium)
+                        }
+
+                        if (hasInterview) {
                             if (!app.interviewDate.isNullOrBlank()) {
-                                Text("Date & Time: ${app.interviewDate} ${app.interviewTime.orEmpty()}")
+                                val dateTime = buildString {
+                                    append(app.interviewDate)
+                                    if (!app.interviewTime.isNullOrBlank()) {
+                                        append(" at ")
+                                        append(app.interviewTime)
+                                    }
+                                }
+                                Text("Date & Time: $dateTime", style = MaterialTheme.typography.bodyMedium)
                             }
-                            if (!app.interviewRound.isNullOrBlank()) {
-                                Text("Round: ${app.interviewRound}")
-                            }
-                            if (!app.interviewType.isNullOrBlank()) {
-                                Text("Type: ${app.interviewType}")
+                            if (!app.interviewRound.isNullOrBlank() || !app.interviewType.isNullOrBlank()) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (!app.interviewRound.isNullOrBlank()) {
+                                        AssistChip(
+                                            onClick = {},
+                                            label = { Text("Round: ${app.interviewRound}") }
+                                        )
+                                    }
+                                    if (!app.interviewType.isNullOrBlank()) {
+                                        AssistChip(
+                                            onClick = {},
+                                            label = { Text("Type: ${app.interviewType}") }
+                                        )
+                                    }
+                                }
                             }
                             if (!app.interviewNotes.isNullOrBlank()) {
                                 Text(
@@ -219,50 +291,19 @@ fun ApplicationDetailScreen(
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
+                        } else {
+                            Text(
+                                text = "No interview scheduled yet.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
 
-                // Follow-up Section Card (if available)
-                if (!app.followUpDate.isNullOrBlank() || !app.followUpNote.isNullOrBlank()) {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Notifications, contentDescription = null)
-                                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                                Text(text = "Follow-up", style = MaterialTheme.typography.titleMedium)
-                            }
-                            if (!app.followUpDate.isNullOrBlank()) {
-                                Text("Date: ${app.followUpDate}")
-                            }
-                            if (!app.followUpNote.isNullOrBlank()) {
-                                Text("Note: ${app.followUpNote}")
-                            }
-                        }
-                    }
-                }
+                // 3. Follow-up Reminder Card (with clean empty state)
+                val hasFollowUp = !app.followUpDate.isNullOrBlank() || !app.followUpNote.isNullOrBlank()
 
-                // General Notes Card (if available)
-                if (!app.generalNotes.isNullOrBlank()) {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(text = "Notes", style = MaterialTheme.typography.titleMedium)
-                            Text(text = app.generalNotes, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-
-                // Timeline Card
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
@@ -270,10 +311,70 @@ fun ApplicationDetailScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "Timeline History",
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Notifications, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text(text = "Follow-up Reminder", style = MaterialTheme.typography.titleMedium)
+                        }
+
+                        if (hasFollowUp) {
+                            if (!app.followUpDate.isNullOrBlank()) {
+                                Text("Date: ${app.followUpDate}", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            if (!app.followUpNote.isNullOrBlank()) {
+                                Text("Note: ${app.followUpNote}", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        } else {
+                            Text(
+                                text = "No follow-up reminder set.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // 4. General Notes Card (with clean empty state)
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Description, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text(text = "Notes", style = MaterialTheme.typography.titleMedium)
+                        }
+                        if (!app.generalNotes.isNullOrBlank()) {
+                            Text(text = app.generalNotes, style = MaterialTheme.typography.bodyMedium)
+                        } else {
+                            Text(
+                                text = "No notes added.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // 5. Timeline History Card
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.History, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text(
+                                text = "Timeline History",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
                         if (uiState.timelineEvents.isEmpty()) {
                             Text(
                                 text = "No timeline events recorded yet.",
@@ -308,5 +409,22 @@ fun ApplicationDetailScreen(
                 }
             }
         }
+    }
+}
+
+private fun openJobUrl(context: Context, url: String) {
+    try {
+        val trimmed = url.trim()
+        val webUrl = if (!trimmed.startsWith("http://", ignoreCase = true) &&
+            !trimmed.startsWith("https://", ignoreCase = true)
+        ) {
+            "https://$trimmed"
+        } else {
+            trimmed
+        }
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(webUrl))
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        // Safe fallback if device has no activity to handle browser intent
     }
 }

@@ -225,7 +225,8 @@ class AddEditApplicationViewModel(
                 )
                 repository.updateApplication(updatedApp)
 
-                // If status changed, create a timeline event to maintain history
+                // 1. If status changed, create a timeline event to maintain history
+                var statusInterviewEventInserted = false
                 if (existing != null && existing.status != state.status) {
                     val eventType = when (state.status) {
                         ApplicationStatus.APPLIED -> TimelineEventType.APPLIED
@@ -235,12 +236,52 @@ class AddEditApplicationViewModel(
                         ApplicationStatus.WITHDRAWN -> TimelineEventType.WITHDRAWN
                         else -> TimelineEventType.CUSTOM
                     }
+                    if (state.status == ApplicationStatus.INTERVIEW && state.interviewDate.isNotBlank()) {
+                        statusInterviewEventInserted = true
+                        repository.insertTimelineEvent(
+                            TimelineEvent(
+                                applicationId = state.id,
+                                eventType = TimelineEventType.INTERVIEW_SCHEDULED,
+                                eventDate = state.interviewDate.trim(),
+                                note = "Interview scheduled (${state.interviewRound.ifBlank { "Round 1" }})"
+                            )
+                        )
+                    } else {
+                        repository.insertTimelineEvent(
+                            TimelineEvent(
+                                applicationId = state.id,
+                                eventType = eventType,
+                                eventDate = LocalDate.now().toString(),
+                                note = "Status changed to ${state.status.displayName}"
+                            )
+                        )
+                    }
+                }
+
+                // 2. If interview date was added or changed (and not already inserted above for status change)
+                val existingInterviewDate = existing?.interviewDate?.trim().orEmpty()
+                val newInterviewDate = state.interviewDate.trim()
+                if (!statusInterviewEventInserted && newInterviewDate.isNotBlank() && newInterviewDate != existingInterviewDate) {
                     repository.insertTimelineEvent(
                         TimelineEvent(
                             applicationId = state.id,
-                            eventType = eventType,
-                            eventDate = LocalDate.now().toString(),
-                            note = "Status changed to ${state.status.displayName}"
+                            eventType = TimelineEventType.INTERVIEW_SCHEDULED,
+                            eventDate = newInterviewDate,
+                            note = "Interview scheduled (${state.interviewRound.ifBlank { "Round 1" }})"
+                        )
+                    )
+                }
+
+                // 3. If follow-up date was added or changed
+                val existingFollowUpDate = existing?.followUpDate?.trim().orEmpty()
+                val newFollowUpDate = state.followUpDate.trim()
+                if (newFollowUpDate.isNotBlank() && newFollowUpDate != existingFollowUpDate) {
+                    repository.insertTimelineEvent(
+                        TimelineEvent(
+                            applicationId = state.id,
+                            eventType = TimelineEventType.FOLLOW_UP_SENT,
+                            eventDate = newFollowUpDate,
+                            note = if (state.followUpNote.isNotBlank()) "Follow-up: ${state.followUpNote.trim()}" else "Follow-up scheduled"
                         )
                     )
                 }
@@ -283,6 +324,17 @@ class AddEditApplicationViewModel(
                             eventType = TimelineEventType.INTERVIEW_SCHEDULED,
                             eventDate = state.interviewDate.trim(),
                             note = "Interview scheduled (${state.interviewRound.ifBlank { "Round 1" }})"
+                        )
+                    )
+                }
+
+                if (state.followUpDate.isNotBlank()) {
+                    repository.insertTimelineEvent(
+                        TimelineEvent(
+                            applicationId = newId,
+                            eventType = TimelineEventType.FOLLOW_UP_SENT,
+                            eventDate = state.followUpDate.trim(),
+                            note = if (state.followUpNote.isNotBlank()) "Follow-up: ${state.followUpNote.trim()}" else "Follow-up scheduled"
                         )
                     )
                 }

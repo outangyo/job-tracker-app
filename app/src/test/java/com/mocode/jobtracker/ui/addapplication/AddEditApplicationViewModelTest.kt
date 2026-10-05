@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.mocode.jobtracker.data.repository.FakeJobRepository
 import com.mocode.jobtracker.domain.model.Application
 import com.mocode.jobtracker.domain.model.ApplicationStatus
+import com.mocode.jobtracker.domain.model.TimelineEvent
 import com.mocode.jobtracker.domain.model.TimelineEventType
 import com.mocode.jobtracker.ui.navigation.Screen
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -180,6 +182,178 @@ class AddEditApplicationViewModelTest {
 
         viewModel.onFollowUpDateChanged("")
         assertEquals("", viewModel.uiState.value.followUpDate)
+    }
+
+    @Test
+    fun saveApplication_whenAppliedDateBlank_failsValidation() = runTest(testDispatcher) {
+        val viewModel = AddEditApplicationViewModel(repository, SavedStateHandle())
+        viewModel.onCompanyNameChanged("Valid Company")
+        viewModel.onPositionChanged("Valid Position")
+        viewModel.onAppliedDateChanged("")
+        viewModel.saveApplication()
+
+        assertFalse(viewModel.uiState.value.isSaved)
+        assertEquals("Applied date is required.", viewModel.uiState.value.appliedDateError)
+    }
+
+    @Test
+    fun saveApplication_withOptionalFieldsEmpty_savesSuccessfully() = runTest(testDispatcher) {
+        val viewModel = AddEditApplicationViewModel(repository, SavedStateHandle())
+        viewModel.onCompanyNameChanged("Minimal Corp")
+        viewModel.onPositionChanged("Developer")
+        viewModel.onAppliedDateChanged("2026-10-01")
+        viewModel.saveApplication()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        val apps = repository.getAllApplications().first()
+        assertEquals(1, apps.size)
+        assertEquals("Minimal Corp", apps[0].companyName)
+        assertNull(apps[0].interviewDate)
+        assertNull(apps[0].followUpDate)
+        assertNull(apps[0].jobUrl)
+
+        // Only 1 initial APPLIED event
+        val events = repository.getTimelineEvents(apps[0].id).first()
+        assertEquals(1, events.size)
+        assertEquals(TimelineEventType.APPLIED, events[0].eventType)
+    }
+
+    @Test
+    fun saveApplication_withInterviewAndFollowUp_inAddMode_persistsAllFieldsAndEvents() = runTest(testDispatcher) {
+        val viewModel = AddEditApplicationViewModel(repository, SavedStateHandle())
+        viewModel.onCompanyNameChanged("Agoda")
+        viewModel.onPositionChanged("Staff Engineer")
+        viewModel.onAppliedDateChanged("2026-10-01")
+        viewModel.onInterviewDateChanged("2026-10-10")
+        viewModel.onInterviewTimeChanged("10:00")
+        viewModel.onInterviewRoundChanged("Technical")
+        viewModel.onInterviewTypeChanged("Online")
+        viewModel.onInterviewNotesChanged("System design preparation")
+        viewModel.onFollowUpDateChanged("2026-10-15")
+        viewModel.onFollowUpNoteChanged("Check status if no news")
+        viewModel.saveApplication()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        val apps = repository.getAllApplications().first()
+        assertEquals(1, apps.size)
+        val app = apps[0]
+        assertEquals("Agoda", app.companyName)
+        assertEquals("2026-10-10", app.interviewDate)
+        assertEquals("10:00", app.interviewTime)
+        assertEquals("Technical", app.interviewRound)
+        assertEquals("Online", app.interviewType)
+        assertEquals("System design preparation", app.interviewNotes)
+        assertEquals("2026-10-15", app.followUpDate)
+        assertEquals("Check status if no news", app.followUpNote)
+
+        // Events: APPLIED, INTERVIEW_SCHEDULED, FOLLOW_UP_SENT
+        val events = repository.getTimelineEvents(app.id).first()
+        assertEquals(3, events.size)
+        assertEquals(TimelineEventType.APPLIED, events[0].eventType)
+        assertEquals(TimelineEventType.INTERVIEW_SCHEDULED, events[1].eventType)
+        assertEquals(TimelineEventType.FOLLOW_UP_SENT, events[2].eventType)
+    }
+
+    @Test
+    fun editApplication_editingUnrelatedFields_doesNotDuplicateInterviewOrFollowUpEvents() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Initial Corp",
+                position = "Dev",
+                appliedDate = "2026-10-01",
+                interviewDate = "2026-10-12",
+                interviewRound = "HR",
+                followUpDate = "2026-10-16",
+                followUpNote = "Send email"
+            )
+        )
+        // Record initial timeline events
+        repository.insertTimelineEvent(TimelineEvent(applicationId = appId, eventType = TimelineEventType.APPLIED, eventDate = "2026-10-01"))
+        repository.insertTimelineEvent(TimelineEvent(applicationId = appId, eventType = TimelineEventType.INTERVIEW_SCHEDULED, eventDate = "2026-10-12"))
+        repository.insertTimelineEvent(TimelineEvent(applicationId = appId, eventType = TimelineEventType.FOLLOW_UP_SENT, eventDate = "2026-10-16"))
+
+        val initialEventCount = repository.getTimelineEvents(appId).first().size
+        assertEquals(3, initialEventCount)
+
+        // Edit UNRELATED fields (salary, location, company name)
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.AddApplication.ARG_APPLICATION_ID to appId))
+        val viewModel = AddEditApplicationViewModel(repository, savedStateHandle)
+        testScheduler.advanceUntilIdle()
+
+        viewModel.onCompanyNameChanged("Updated Corp")
+        viewModel.onSalaryChanged("100k THB")
+        viewModel.onLocationChanged("Bangkok")
+        viewModel.saveApplication()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        val eventsAfter = repository.getTimelineEvents(appId).first()
+        // Event count must NOT increase
+        assertEquals(3, eventsAfter.size)
+    }
+
+    @Test
+    fun editApplication_changingInterviewAndFollowUpDates_recordsDeterministicEvents() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Initial Corp",
+                position = "Dev",
+                appliedDate = "2026-10-01",
+                interviewDate = "2026-10-12",
+                followUpDate = "2026-10-16"
+            )
+        )
+        repository.insertTimelineEvent(TimelineEvent(applicationId = appId, eventType = TimelineEventType.APPLIED, eventDate = "2026-10-01"))
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.AddApplication.ARG_APPLICATION_ID to appId))
+        val viewModel = AddEditApplicationViewModel(repository, savedStateHandle)
+        testScheduler.advanceUntilIdle()
+
+        // Update interview date and follow-up date
+        viewModel.onInterviewDateChanged("2026-10-20")
+        viewModel.onFollowUpDateChanged("2026-10-25")
+        viewModel.saveApplication()
+        testScheduler.advanceUntilIdle()
+
+        val events = repository.getTimelineEvents(appId).first()
+        assertEquals(3, events.size)
+        assertTrue(events.any { it.eventType == TimelineEventType.INTERVIEW_SCHEDULED && it.eventDate == "2026-10-20" })
+        assertTrue(events.any { it.eventType == TimelineEventType.FOLLOW_UP_SENT && it.eventDate == "2026-10-25" })
+    }
+
+    @Test
+    fun editApplication_clearingOptionalDates_persistsNullsWithoutNewEvents() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Initial Corp",
+                position = "Dev",
+                appliedDate = "2026-10-01",
+                interviewDate = "2026-10-12",
+                followUpDate = "2026-10-16"
+            )
+        )
+        repository.insertTimelineEvent(TimelineEvent(applicationId = appId, eventType = TimelineEventType.APPLIED, eventDate = "2026-10-01"))
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.AddApplication.ARG_APPLICATION_ID to appId))
+        val viewModel = AddEditApplicationViewModel(repository, savedStateHandle)
+        testScheduler.advanceUntilIdle()
+
+        // Clear interview date and follow-up date
+        viewModel.onInterviewDateChanged("")
+        viewModel.onFollowUpDateChanged("")
+        viewModel.saveApplication()
+        testScheduler.advanceUntilIdle()
+
+        val updated = repository.getApplicationByIdOnce(appId)
+        assertNotNull(updated)
+        assertNull(updated?.interviewDate)
+        assertNull(updated?.followUpDate)
+
+        // No new events added
+        val events = repository.getTimelineEvents(appId).first()
+        assertEquals(1, events.size)
     }
 }
 
