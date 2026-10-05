@@ -143,4 +143,61 @@ class TimelineEventDaoTest {
             afterDeleteEvents.isEmpty()
         )
     }
+
+    @Test
+    fun insertAndQueryCustomEvent_storesAndRetrievesCustomTitle() = runTest {
+        val app = ApplicationEntity(
+            companyName = "Discord",
+            position = "Senior Android Engineer",
+            appliedDate = "2026-10-01"
+        )
+        val appId = applicationDao.insert(app)
+
+        val customEvent = TimelineEventEntity(
+            applicationId = appId,
+            eventType = TimelineEventType.CUSTOM,
+            customTitle = "Salary Negotiation",
+            eventDate = "2026-10-10",
+            note = "Discussed equity & base salary with recruiter"
+        )
+        val eventId = timelineEventDao.insert(customEvent)
+
+        val retrieved = timelineEventDao.getEventsForApplicationOnce(appId)
+        assertEquals(1, retrieved.size)
+        assertEquals("Salary Negotiation", retrieved[0].customTitle)
+        assertEquals(TimelineEventType.CUSTOM, retrieved[0].eventType)
+        assertEquals("2026-10-10", retrieved[0].eventDate)
+    }
+
+    @Test
+    fun updateTimelineEvent_updatesFieldsCorrectly() = runTest {
+        val app = ApplicationEntity(
+            companyName = "Stripe",
+            position = "Software Engineer",
+            appliedDate = "2026-10-01"
+        )
+        val appId = applicationDao.insert(app)
+
+        val event = TimelineEventEntity(
+            applicationId = appId,
+            eventType = TimelineEventType.CUSTOM,
+            customTitle = "Initial Takehome",
+            eventDate = "2026-10-02",
+            note = "Received assignment"
+        )
+        val eventId = timelineEventDao.insert(event)
+
+        val loaded = timelineEventDao.getEventsForApplicationOnce(appId)[0]
+        val updated = loaded.copy(
+            customTitle = "Completed Takehome",
+            eventDate = "2026-10-05",
+            note = "Submitted assignment on GitHub"
+        )
+        timelineEventDao.update(updated)
+
+        val afterUpdate = timelineEventDao.getEventsForApplicationOnce(appId)[0]
+        assertEquals("Completed Takehome", afterUpdate.customTitle)
+        assertEquals("2026-10-05", afterUpdate.eventDate)
+        assertEquals("Submitted assignment on GitHub", afterUpdate.note)
+    }
 }

@@ -77,8 +77,32 @@ class EntityMappersTest {
         assertEquals(originalEvent.id, mappedEvent.id)
         assertEquals(originalEvent.applicationId, mappedEvent.applicationId)
         assertEquals(originalEvent.eventType, mappedEvent.eventType)
+        assertEquals(originalEvent.customTitle, mappedEvent.customTitle)
         assertEquals(originalEvent.eventDate, mappedEvent.eventDate)
         assertEquals(originalEvent.note, mappedEvent.note)
         assertEquals(originalEvent.createdAt, mappedEvent.createdAt)
+    }
+
+    @Test
+    fun timelineEvent_withCustomTitle_preservesCustomTitleAndDisplayTitle() {
+        val customEvent = TimelineEvent(
+            id = 11L,
+            applicationId = 42L,
+            eventType = TimelineEventType.CUSTOM,
+            customTitle = "Live Coding Challenge",
+            eventDate = "2026-10-06",
+            note = "2-hour pair programming session",
+            createdAt = 1728000200000L
+        )
+
+        val entity = customEvent.toEntity()
+        val mappedEvent = entity.toDomain()
+
+        assertEquals("Live Coding Challenge", mappedEvent.customTitle)
+        assertEquals("Live Coding Challenge", mappedEvent.displayTitle)
+
+        // When customTitle is null or blank for CUSTOM event, fallback to displayName "Custom"
+        val fallbackEvent = customEvent.copy(customTitle = "   ")
+        assertEquals("Custom", fallbackEvent.displayTitle)
     }
 }

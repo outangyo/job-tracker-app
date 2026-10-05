@@ -146,4 +146,35 @@ class RoomJobRepositoryTest {
         val afterDelete = repository.getTimelineEventsOnce(appId)
         assertTrue(afterDelete.isEmpty())
     }
+
+    @Test
+    fun repository_updateTimelineEvent() = runTest {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Figma",
+                position = "UI Engineer",
+                appliedDate = "2026-10-01"
+            )
+        )
+
+        val event = TimelineEvent(
+            applicationId = appId,
+            eventType = TimelineEventType.CUSTOM,
+            customTitle = "Portfolio Review",
+            eventDate = "2026-10-05",
+            note = "Initial submission"
+        )
+        val eventId = repository.insertTimelineEvent(event)
+
+        val loaded = repository.getTimelineEventsOnce(appId)[0]
+        val updated = loaded.copy(
+            customTitle = "Design System Interview",
+            note = "Walkthrough with staff designer"
+        )
+        repository.updateTimelineEvent(updated)
+
+        val afterUpdate = repository.getTimelineEventsOnce(appId)[0]
+        assertEquals("Design System Interview", afterUpdate.customTitle)
+        assertEquals("Walkthrough with staff designer", afterUpdate.note)
+    }
 }

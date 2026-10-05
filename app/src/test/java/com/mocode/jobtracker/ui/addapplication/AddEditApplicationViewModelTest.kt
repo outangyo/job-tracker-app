@@ -355,5 +355,42 @@ class AddEditApplicationViewModelTest {
         val events = repository.getTimelineEvents(appId).first()
         assertEquals(1, events.size)
     }
+
+    @Test
+    fun editApplication_whenUserPreviouslyDeletedSystemEvent_unrelatedEditDoesNotRecreateIt() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Initial Corp",
+                position = "Dev",
+                appliedDate = "2026-10-01",
+                status = ApplicationStatus.INTERVIEW,
+                interviewDate = "2026-10-12",
+                interviewRound = "HR",
+                followUpDate = "2026-10-16"
+            )
+        )
+        // User had initially generated events, but then explicitly deleted the INTERVIEW_SCHEDULED and FOLLOW_UP_SENT events
+        repository.insertTimelineEvent(TimelineEvent(applicationId = appId, eventType = TimelineEventType.APPLIED, eventDate = "2026-10-01"))
+
+        // Only 1 event remains in repository because user deleted the interview and follow up events
+        assertEquals(1, repository.getTimelineEventsOnce(appId).size)
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.AddApplication.ARG_APPLICATION_ID to appId))
+        val viewModel = AddEditApplicationViewModel(repository, savedStateHandle)
+        testScheduler.advanceUntilIdle()
+
+        // Edit unrelated fields (company name, salary, location)
+        viewModel.onCompanyNameChanged("Updated Corp")
+        viewModel.onSalaryChanged("120,000 THB")
+        viewModel.onLocationChanged("Bangkok")
+        viewModel.saveApplication()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        val eventsAfter = repository.getTimelineEventsOnce(appId)
+        // Ensure deleted events were NOT recreated!
+        assertEquals(1, eventsAfter.size)
+        assertEquals(TimelineEventType.APPLIED, eventsAfter[0].eventType)
+    }
 }
 

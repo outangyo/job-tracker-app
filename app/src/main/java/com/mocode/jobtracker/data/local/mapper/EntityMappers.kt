@@ -56,6 +56,7 @@ fun TimelineEventEntity.toDomain(): TimelineEvent {
         id = id,
         applicationId = applicationId,
         eventType = eventType,
+        customTitle = customTitle,
         eventDate = eventDate,
         note = note,
         createdAt = createdAt
@@ -67,6 +68,7 @@ fun TimelineEvent.toEntity(): TimelineEventEntity {
         id = id,
         applicationId = applicationId,
         eventType = eventType,
+        customTitle = customTitle,
         eventDate = eventDate,
         note = note,
         createdAt = createdAt

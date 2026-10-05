@@ -192,5 +192,284 @@ class ApplicationDetailViewModelTest {
         assertNull(app?.followUpNote)
         assertNull(app?.generalNotes)
     }
+
+    @Test
+    fun timeline_addStandardEvent_persistsEventAndDoesNotChangeApplicationStatus() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Shopify",
+                position = "Staff Android Developer",
+                appliedDate = "2026-10-01",
+                status = ApplicationStatus.APPLIED
+            )
+        )
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.ApplicationDetail.ARG_APPLICATION_ID to appId))
+        val viewModel = ApplicationDetailViewModel(repository, savedStateHandle)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testScheduler.advanceUntilIdle()
+
+        // User clicks add event
+        viewModel.onAddEventClicked()
+        testScheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isAddingEvent)
+        assertNull(viewModel.uiState.value.eventBeingEdited)
+
+        // Save event (Interview Completed)
+        viewModel.saveTimelineEvent(
+            eventType = TimelineEventType.INTERVIEW_COMPLETED,
+            customTitle = null,
+            eventDate = "2026-10-05",
+            note = "Technical interview went very well"
+        )
+        testScheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isAddingEvent)
+        val events = repository.getTimelineEventsOnce(appId)
+        assertEquals(1, events.size)
+        assertEquals(TimelineEventType.INTERVIEW_COMPLETED, events[0].eventType)
+        assertEquals("2026-10-05", events[0].eventDate)
+        assertEquals("Technical interview went very well", events[0].note)
+
+        // CRITICAL SEPARATION RULE: Manual timeline event must NOT change Application status
+        val currentApp = repository.getApplicationByIdOnce(appId)
+        assertEquals(ApplicationStatus.APPLIED, currentApp?.status)
+        assertEquals(ApplicationStatus.APPLIED, viewModel.uiState.value.application?.status)
+    }
+
+    @Test
+    fun timeline_addCustomEvent_persistsCustomTitleAndDoesNotChangeStatus() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Canva",
+                position = "Frontend Engineer",
+                appliedDate = "2026-10-01",
+                status = ApplicationStatus.WISHLIST
+            )
+        )
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.ApplicationDetail.ARG_APPLICATION_ID to appId))
+        val viewModel = ApplicationDetailViewModel(repository, savedStateHandle)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testScheduler.advanceUntilIdle()
+
+        viewModel.onAddEventClicked()
+        viewModel.saveTimelineEvent(
+            eventType = TimelineEventType.CUSTOM,
+            customTitle = "Take-home Assignment",
+            eventDate = "2026-10-06",
+            note = "Received 48-hour design project"
+        )
+        testScheduler.advanceUntilIdle()
+
+        val events = repository.getTimelineEventsOnce(appId)
+        assertEquals(1, events.size)
+        assertEquals(TimelineEventType.CUSTOM, events[0].eventType)
+        assertEquals("Take-home Assignment", events[0].customTitle)
+        assertEquals("Take-home Assignment", events[0].displayTitle)
+        assertEquals("Received 48-hour design project", events[0].note)
+
+        // Application status remains WISHLIST
+        val currentApp = repository.getApplicationByIdOnce(appId)
+        assertEquals(ApplicationStatus.WISHLIST, currentApp?.status)
+    }
+
+    @Test
+    fun timeline_editExistingEvent_updatesEventCorrectlyAndPreservesApplicationStatus() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Atlassian",
+                position = "Kotlin Dev",
+                appliedDate = "2026-10-01",
+                status = ApplicationStatus.INTERVIEW
+            )
+        )
+        val initialEventId = repository.insertTimelineEvent(
+            TimelineEvent(
+                applicationId = appId,
+                eventType = TimelineEventType.INTERVIEW_SCHEDULED,
+                eventDate = "2026-10-10",
+                note = "Initial date"
+            )
+        )
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.ApplicationDetail.ARG_APPLICATION_ID to appId))
+        val viewModel = ApplicationDetailViewModel(repository, savedStateHandle)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testScheduler.advanceUntilIdle()
+
+        val eventToEdit = viewModel.uiState.value.timelineEvents.first { it.id == initialEventId }
+        viewModel.onEditEventClicked(eventToEdit)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(eventToEdit, viewModel.uiState.value.eventBeingEdited)
+        assertFalse(viewModel.uiState.value.isAddingEvent)
+
+        // Update event: change to Custom, reschedule date, update note
+        viewModel.saveTimelineEvent(
+            eventType = TimelineEventType.CUSTOM,
+            customTitle = "Rescheduled Interview",
+            eventDate = "2026-10-15",
+            note = "Rescheduled due to recruiter conflict"
+        )
+        testScheduler.advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.eventBeingEdited)
+
+        val updatedEvents = repository.getTimelineEventsOnce(appId)
+        assertEquals(1, updatedEvents.size)
+        assertEquals(TimelineEventType.CUSTOM, updatedEvents[0].eventType)
+        assertEquals("Rescheduled Interview", updatedEvents[0].customTitle)
+        assertEquals("2026-10-15", updatedEvents[0].eventDate)
+        assertEquals("Rescheduled due to recruiter conflict", updatedEvents[0].note)
+
+        // Status unchanged
+        assertEquals(ApplicationStatus.INTERVIEW, repository.getApplicationByIdOnce(appId)?.status)
+    }
+
+    @Test
+    fun timeline_deleteEvent_dialogFlow_deletesFromRepositoryAndPreservesStatus() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Oracle",
+                position = "Backend Engineer",
+                appliedDate = "2026-10-01",
+                status = ApplicationStatus.INTERVIEW
+            )
+        )
+        val eventId = repository.insertTimelineEvent(
+            TimelineEvent(
+                applicationId = appId,
+                eventType = TimelineEventType.FOLLOW_UP_SENT,
+                eventDate = "2026-10-08",
+                note = "Sent email"
+            )
+        )
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.ApplicationDetail.ARG_APPLICATION_ID to appId))
+        val viewModel = ApplicationDetailViewModel(repository, savedStateHandle)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testScheduler.advanceUntilIdle()
+
+        val event = viewModel.uiState.value.timelineEvents.first { it.id == eventId }
+
+        // Open delete dialog
+        viewModel.onDeleteEventClicked(event)
+        testScheduler.advanceUntilIdle()
+        assertEquals(event, viewModel.uiState.value.eventToDelete)
+
+        // Dismiss delete dialog
+        viewModel.onDismissDeleteEventDialog()
+        testScheduler.advanceUntilIdle()
+        assertNull(viewModel.uiState.value.eventToDelete)
+
+        // Click delete and confirm
+        viewModel.onDeleteEventClicked(event)
+        viewModel.onConfirmDeleteEvent()
+        testScheduler.advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.eventToDelete)
+        val remainingEvents = repository.getTimelineEventsOnce(appId)
+        assertTrue(remainingEvents.isEmpty())
+
+        // Application status unchanged
+        assertEquals(ApplicationStatus.INTERVIEW, repository.getApplicationByIdOnce(appId)?.status)
+    }
+
+    @Test
+    fun timeline_eventsSortedChronologically_newestToOldest() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Discord",
+                position = "Staff Engineer",
+                appliedDate = "2026-10-01"
+            )
+        )
+
+        // Insert events in non-chronological order
+        repository.insertTimelineEvent(
+            TimelineEvent(
+                applicationId = appId,
+                eventType = TimelineEventType.APPLIED,
+                eventDate = "2026-10-01",
+                note = "Applied",
+                createdAt = 1000L
+            )
+        )
+        repository.insertTimelineEvent(
+            TimelineEvent(
+                applicationId = appId,
+                eventType = TimelineEventType.OFFER_RECEIVED,
+                eventDate = "2026-10-20",
+                note = "Offer received",
+                createdAt = 3000L
+            )
+        )
+        repository.insertTimelineEvent(
+            TimelineEvent(
+                applicationId = appId,
+                eventType = TimelineEventType.INTERVIEW_COMPLETED,
+                eventDate = "2026-10-10",
+                note = "Interview done",
+                createdAt = 2000L
+            )
+        )
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.ApplicationDetail.ARG_APPLICATION_ID to appId))
+        val viewModel = ApplicationDetailViewModel(repository, savedStateHandle)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testScheduler.advanceUntilIdle()
+
+        val eventsInUi = viewModel.uiState.value.timelineEvents
+        assertEquals(3, eventsInUi.size)
+
+        // Must be sorted Newest -> Oldest
+        assertEquals("2026-10-20", eventsInUi[0].eventDate)
+        assertEquals(TimelineEventType.OFFER_RECEIVED, eventsInUi[0].eventType)
+
+        assertEquals("2026-10-10", eventsInUi[1].eventDate)
+        assertEquals(TimelineEventType.INTERVIEW_COMPLETED, eventsInUi[1].eventType)
+
+        assertEquals("2026-10-01", eventsInUi[2].eventDate)
+        assertEquals(TimelineEventType.APPLIED, eventsInUi[2].eventType)
+    }
+
+    @Test
+    fun timeline_dismissEventDialog_clearsBothAddAndEditStates() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Reddit",
+                position = "Android Engineer",
+                appliedDate = "2026-10-01"
+            )
+        )
+
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.ApplicationDetail.ARG_APPLICATION_ID to appId))
+        val viewModel = ApplicationDetailViewModel(repository, savedStateHandle)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testScheduler.advanceUntilIdle()
+
+        viewModel.onAddEventClicked()
+        testScheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isAddingEvent)
+
+        viewModel.onDismissEventDialog()
+        testScheduler.advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isAddingEvent)
+        assertNull(viewModel.uiState.value.eventBeingEdited)
+    }
 }
+
 

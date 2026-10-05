@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mocode.jobtracker.domain.model.ApplicationStatus
+import com.mocode.jobtracker.ui.common.AppDatePickerDialog
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -450,54 +451,4 @@ fun AddApplicationScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AppDatePickerDialog(
-    initialDate: String?,
-    onDateSelected: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val initialMillis = remember(initialDate) {
-        try {
-            if (!initialDate.isNullOrBlank()) {
-                val parsed = LocalDate.parse(initialDate.trim())
-                parsed.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-            } else {
-                LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-            }
-        } catch (_: Exception) {
-            LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-        }
-    }
-
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = initialMillis
-    )
-
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val selectedDate = Instant.ofEpochMilli(millis)
-                            .atZone(ZoneOffset.UTC)
-                            .toLocalDate()
-                        onDateSelected(selectedDate.toString())
-                    }
-                    onDismiss()
-                }
-            ) {
-                Text("OK")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    ) {
-        DatePicker(state = datePickerState)
-    }
-}
 

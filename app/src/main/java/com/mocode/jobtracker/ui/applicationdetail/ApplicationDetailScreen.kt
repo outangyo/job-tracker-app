@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +21,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
@@ -33,10 +37,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
@@ -47,12 +54,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mocode.jobtracker.domain.model.TimelineEvent
+import com.mocode.jobtracker.domain.model.TimelineEventType
+import com.mocode.jobtracker.ui.common.AppDatePickerDialog
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +84,7 @@ fun ApplicationDetailScreen(
         }
     }
 
+    // 1. Delete Application Confirmation Dialog
     if (uiState.showDeleteDialog) {
         AlertDialog(
             onDismissRequest = viewModel::onDismissDeleteDialog,
@@ -88,6 +103,40 @@ fun ApplicationDetailScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    // 2. Delete Timeline Event Confirmation Dialog
+    if (uiState.eventToDelete != null) {
+        val event = uiState.eventToDelete!!
+        AlertDialog(
+            onDismissRequest = viewModel::onDismissDeleteEventDialog,
+            title = { Text("Delete timeline event?") },
+            text = { Text("Are you sure you want to delete '${event.displayTitle}' (${event.eventDate})?") },
+            confirmButton = {
+                Button(
+                    onClick = viewModel::onConfirmDeleteEvent,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::onDismissDeleteEventDialog) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 3. Add / Edit Timeline Event Dialog
+    if (uiState.isAddingEvent || uiState.eventBeingEdited != null) {
+        TimelineEventDialog(
+            initialEvent = uiState.eventBeingEdited,
+            onSave = { eventType, customTitle, eventDate, note ->
+                viewModel.saveTimelineEvent(eventType, customTitle, eventDate, note)
+            },
+            onDismiss = viewModel::onDismissEventDialog
         )
     }
 
@@ -359,42 +408,101 @@ fun ApplicationDetailScreen(
                     }
                 }
 
-                // 5. Timeline History Card
+                // 5. Timeline History Card (Chronological Newest -> Oldest with Add, Edit, Delete)
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.History, contentDescription = null)
-                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                            Text(
-                                text = "Timeline History",
-                                style = MaterialTheme.typography.titleMedium
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = Icons.Default.History, contentDescription = null)
+                                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                                Text(
+                                    text = "Timeline History",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = viewModel::onAddEventClicked,
+                                contentPadding = ButtonDefaults.TextButtonContentPadding
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.padding(horizontal = 2.dp))
+                                Text("Add Event")
+                            }
                         }
+
                         if (uiState.timelineEvents.isEmpty()) {
                             Text(
-                                text = "No timeline events recorded yet.",
+                                text = "No timeline events recorded yet. Tap '+ Add Event' to log your job progress.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
-                            uiState.timelineEvents.forEach { event ->
-                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                    Text(
-                                        text = "• ${event.eventDate} — ${event.eventType.displayName}",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                    if (!event.note.isNullOrBlank()) {
+                            uiState.timelineEvents.forEachIndexed { index, event ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = "  ${event.note}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            text = event.displayTitle,
+                                            style = MaterialTheme.typography.titleSmall
                                         )
+                                        Text(
+                                            text = event.eventDate,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                        if (!event.note.isNullOrBlank()) {
+                                            Text(
+                                                text = event.note,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
                                     }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { viewModel.onEditEventClicked(event) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit event",
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { viewModel.onDeleteEventClicked(event) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete event",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (index < uiState.timelineEvents.lastIndex) {
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                 }
                             }
                         }
@@ -410,6 +518,129 @@ fun ApplicationDetailScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TimelineEventDialog(
+    initialEvent: TimelineEvent?,
+    onSave: (eventType: TimelineEventType, customTitle: String?, eventDate: String, note: String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedType by remember { mutableStateOf(initialEvent?.eventType ?: TimelineEventType.APPLIED) }
+    var customTitle by remember { mutableStateOf(initialEvent?.customTitle.orEmpty()) }
+    var customTitleError by remember { mutableStateOf<String?>(null) }
+    var eventDate by remember { mutableStateOf(initialEvent?.eventDate ?: LocalDate.now().toString()) }
+    var note by remember { mutableStateOf(initialEvent?.note.orEmpty()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        AppDatePickerDialog(
+            initialDate = eventDate,
+            onDateSelected = {
+                eventDate = it
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false }
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(if (initialEvent != null) "Edit Timeline Event" else "Add Timeline Event")
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(text = "Event Type *", style = MaterialTheme.typography.bodyMedium)
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    TimelineEventType.entries.forEach { type ->
+                        FilterChip(
+                            selected = selectedType == type,
+                            onClick = {
+                                selectedType = type
+                                if (type != TimelineEventType.CUSTOM) {
+                                    customTitleError = null
+                                }
+                            },
+                            label = { Text(type.displayName) }
+                        )
+                    }
+                }
+
+                if (selectedType == TimelineEventType.CUSTOM) {
+                    OutlinedTextField(
+                        value = customTitle,
+                        onValueChange = {
+                            customTitle = it
+                            customTitleError = null
+                        },
+                        label = { Text("Custom Event Title *") },
+                        placeholder = { Text("e.g. Coding Test, Portfolio Review") },
+                        isError = customTitleError != null,
+                        supportingText = customTitleError?.let { { Text(it) } },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
+                OutlinedTextField(
+                    value = eventDate,
+                    onValueChange = { eventDate = it },
+                    label = { Text("Event Date *") },
+                    placeholder = { Text("YYYY-MM-DD") },
+                    trailingIcon = {
+                        IconButton(onClick = { showDatePicker = true }) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = "Select event date"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("Note (Optional)") },
+                    placeholder = { Text("Details or outcomes...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 4
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (selectedType == TimelineEventType.CUSTOM && customTitle.isBlank()) {
+                        customTitleError = "Custom title is required"
+                        return@Button
+                    }
+                    onSave(selectedType, customTitle, eventDate, note)
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 private fun openJobUrl(context: Context, url: String) {
