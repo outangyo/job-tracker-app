@@ -7,6 +7,7 @@ import com.mocode.jobtracker.data.repository.JobRepository
 import com.mocode.jobtracker.domain.model.Application
 import com.mocode.jobtracker.domain.model.TimelineEvent
 import com.mocode.jobtracker.domain.model.TimelineEventType
+import com.mocode.jobtracker.notification.ReminderScheduler
 import com.mocode.jobtracker.ui.navigation.Screen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,7 +30,8 @@ data class ApplicationDetailUiState(
 
 class ApplicationDetailViewModel(
     private val repository: JobRepository,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val reminderScheduler: ReminderScheduler? = null
 ) : ViewModel() {
 
     val applicationId: Long = savedStateHandle.get<Long>(Screen.ApplicationDetail.ARG_APPLICATION_ID) ?: -1L
@@ -92,6 +94,7 @@ class ApplicationDetailViewModel(
     fun onConfirmDelete() {
         viewModelScope.launch {
             _deleteAppDialogState.update { false }
+            reminderScheduler?.cancelAllRemindersForApplication(applicationId)
             repository.deleteApplicationById(applicationId)
             _isDeleted.update { true }
         }

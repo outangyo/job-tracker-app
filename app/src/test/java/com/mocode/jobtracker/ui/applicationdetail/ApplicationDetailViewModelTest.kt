@@ -6,6 +6,7 @@ import com.mocode.jobtracker.domain.model.Application
 import com.mocode.jobtracker.domain.model.ApplicationStatus
 import com.mocode.jobtracker.domain.model.TimelineEvent
 import com.mocode.jobtracker.domain.model.TimelineEventType
+import com.mocode.jobtracker.notification.FakeReminderScheduler
 import com.mocode.jobtracker.ui.navigation.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -470,6 +471,32 @@ class ApplicationDetailViewModelTest {
         assertFalse(viewModel.uiState.value.isAddingEvent)
         assertNull(viewModel.uiState.value.eventBeingEdited)
     }
+
+    @Test
+    fun detailViewModel_confirmDelete_cancelsAllRemindersForApplication() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Discord",
+                position = "Android Architect",
+                appliedDate = "2026-10-01"
+            )
+        )
+        val reminderScheduler = FakeReminderScheduler()
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.ApplicationDetail.ARG_APPLICATION_ID to appId))
+        val viewModel = ApplicationDetailViewModel(repository, savedStateHandle, reminderScheduler)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect()
+        }
+        testScheduler.advanceUntilIdle()
+
+        viewModel.onConfirmDelete()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isDeleted)
+        assertTrue(reminderScheduler.cancelledAllForApp.contains(appId))
+        assertNull(repository.getApplicationByIdOnce(appId))
+    }
 }
+
 
 

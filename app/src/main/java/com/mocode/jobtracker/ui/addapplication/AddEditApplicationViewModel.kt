@@ -8,6 +8,7 @@ import com.mocode.jobtracker.domain.model.Application
 import com.mocode.jobtracker.domain.model.ApplicationStatus
 import com.mocode.jobtracker.domain.model.TimelineEvent
 import com.mocode.jobtracker.domain.model.TimelineEventType
+import com.mocode.jobtracker.notification.ReminderScheduler
 import com.mocode.jobtracker.ui.navigation.Screen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +45,8 @@ data class AddEditFormState(
 
 class AddEditApplicationViewModel(
     private val repository: JobRepository,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val reminderScheduler: ReminderScheduler? = null
 ) : ViewModel() {
 
     private val applicationId: Long = savedStateHandle.get<Long>(Screen.AddApplication.ARG_APPLICATION_ID) ?: -1L
@@ -285,6 +287,19 @@ class AddEditApplicationViewModel(
                         )
                     )
                 }
+
+                // 4. Update reminders for Edit Mode
+                if (updatedApp.interviewDate.isNullOrBlank()) {
+                    reminderScheduler?.cancelInterviewReminder(updatedApp.id)
+                } else if (updatedApp.interviewDate != existing?.interviewDate || updatedApp.interviewTime != existing?.interviewTime) {
+                    reminderScheduler?.scheduleInterviewReminder(updatedApp)
+                }
+
+                if (updatedApp.followUpDate.isNullOrBlank()) {
+                    reminderScheduler?.cancelFollowUpReminder(updatedApp.id)
+                } else if (updatedApp.followUpDate != existing?.followUpDate || updatedApp.followUpNote != existing?.followUpNote) {
+                    reminderScheduler?.scheduleFollowUpReminder(updatedApp)
+                }
             } else {
                 val newApp = Application(
                     companyName = state.companyName.trim(),
@@ -337,6 +352,15 @@ class AddEditApplicationViewModel(
                             note = if (state.followUpNote.isNotBlank()) "Follow-up: ${state.followUpNote.trim()}" else "Follow-up scheduled"
                         )
                     )
+                }
+
+                // Schedule reminders for new application
+                val savedApp = newApp.copy(id = newId)
+                if (!savedApp.interviewDate.isNullOrBlank()) {
+                    reminderScheduler?.scheduleInterviewReminder(savedApp)
+                }
+                if (!savedApp.followUpDate.isNullOrBlank()) {
+                    reminderScheduler?.scheduleFollowUpReminder(savedApp)
                 }
             }
             _uiState.update { it.copy(isSaved = true) }

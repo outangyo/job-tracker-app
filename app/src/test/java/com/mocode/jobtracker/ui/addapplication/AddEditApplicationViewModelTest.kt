@@ -6,6 +6,7 @@ import com.mocode.jobtracker.domain.model.Application
 import com.mocode.jobtracker.domain.model.ApplicationStatus
 import com.mocode.jobtracker.domain.model.TimelineEvent
 import com.mocode.jobtracker.domain.model.TimelineEventType
+import com.mocode.jobtracker.notification.FakeReminderScheduler
 import com.mocode.jobtracker.ui.navigation.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -392,5 +393,84 @@ class AddEditApplicationViewModelTest {
         assertEquals(1, eventsAfter.size)
         assertEquals(TimelineEventType.APPLIED, eventsAfter[0].eventType)
     }
+
+    @Test
+    fun saveApplication_inAddMode_schedulesRemindersWhenDatesPresent() = runTest(testDispatcher) {
+        val reminderScheduler = FakeReminderScheduler()
+        val savedStateHandle = SavedStateHandle()
+        val viewModel = AddEditApplicationViewModel(repository, savedStateHandle, reminderScheduler)
+
+        viewModel.onCompanyNameChanged("Agoda")
+        viewModel.onPositionChanged("Mobile Engineer")
+        viewModel.onAppliedDateChanged("2026-10-05")
+        viewModel.onInterviewDateChanged("2026-10-15")
+        viewModel.onInterviewTimeChanged("14:00")
+        viewModel.onFollowUpDateChanged("2026-10-20")
+        viewModel.onFollowUpNoteChanged("Follow up with recruiter")
+        viewModel.saveApplication()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        assertEquals(1, reminderScheduler.scheduledInterviews.size)
+        assertEquals(1, reminderScheduler.scheduledFollowUps.size)
+        assertEquals("Agoda", reminderScheduler.scheduledInterviews[0].companyName)
+        assertEquals("2026-10-15", reminderScheduler.scheduledInterviews[0].interviewDate)
+        assertEquals("2026-10-20", reminderScheduler.scheduledFollowUps[0].followUpDate)
+    }
+
+    @Test
+    fun editApplication_whenInterviewOrFollowUpUpdated_schedulesUpdatedReminders() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Lineman",
+                position = "Backend Dev",
+                appliedDate = "2026-10-01",
+                interviewDate = "2026-10-10",
+                followUpDate = "2026-10-12"
+            )
+        )
+        val reminderScheduler = FakeReminderScheduler()
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.AddApplication.ARG_APPLICATION_ID to appId))
+        val viewModel = AddEditApplicationViewModel(repository, savedStateHandle, reminderScheduler)
+        testScheduler.advanceUntilIdle()
+
+        viewModel.onInterviewDateChanged("2026-10-18")
+        viewModel.onFollowUpDateChanged("2026-10-22")
+        viewModel.saveApplication()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        assertEquals(1, reminderScheduler.scheduledInterviews.size)
+        assertEquals(1, reminderScheduler.scheduledFollowUps.size)
+        assertEquals("2026-10-18", reminderScheduler.scheduledInterviews[0].interviewDate)
+        assertEquals("2026-10-22", reminderScheduler.scheduledFollowUps[0].followUpDate)
+    }
+
+    @Test
+    fun editApplication_whenDatesCleared_cancelsExistingReminders() = runTest(testDispatcher) {
+        val appId = repository.insertApplication(
+            Application(
+                companyName = "Shopee",
+                position = "iOS Dev",
+                appliedDate = "2026-10-01",
+                interviewDate = "2026-10-10",
+                followUpDate = "2026-10-12"
+            )
+        )
+        val reminderScheduler = FakeReminderScheduler()
+        val savedStateHandle = SavedStateHandle(mapOf(Screen.AddApplication.ARG_APPLICATION_ID to appId))
+        val viewModel = AddEditApplicationViewModel(repository, savedStateHandle, reminderScheduler)
+        testScheduler.advanceUntilIdle()
+
+        viewModel.onInterviewDateChanged("")
+        viewModel.onFollowUpDateChanged("")
+        viewModel.saveApplication()
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        assertTrue(reminderScheduler.cancelledInterviews.contains(appId))
+        assertTrue(reminderScheduler.cancelledFollowUps.contains(appId))
+    }
 }
+
 

@@ -1,30 +1,65 @@
 package com.mocode.jobtracker.ui.settings
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.mocode.jobtracker.data.preferences.ThemePreference
+import com.mocode.jobtracker.data.preferences.UserPreferencesRepository
+import com.mocode.jobtracker.notification.ReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val isBiometricEnabled: Boolean = false,
     val isNotificationsEnabled: Boolean = true,
-    val darkThemeOption: String = "System Default"
+    val themePreference: ThemePreference = ThemePreference.SYSTEM
 )
 
-class SettingsViewModel : ViewModel() {
-    private val _uiState = MutableStateFlow(SettingsUiState())
-    val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+class SettingsViewModel(
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val reminderScheduler: ReminderScheduler? = null
+) : ViewModel() {
+
+    private val _isBiometricEnabled = MutableStateFlow(false)
+
+    val uiState: StateFlow<SettingsUiState> = combine(
+        userPreferencesRepository.notificationsEnabled,
+        userPreferencesRepository.themePreference,
+        _isBiometricEnabled
+    ) { notificationsEnabled, themePreference, biometricEnabled ->
+        SettingsUiState(
+            isBiometricEnabled = biometricEnabled,
+            isNotificationsEnabled = notificationsEnabled,
+            themePreference = themePreference
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = SettingsUiState()
+    )
 
     fun toggleBiometric(enabled: Boolean) {
-        _uiState.update { it.copy(isBiometricEnabled = enabled) }
+        _isBiometricEnabled.update { enabled }
     }
 
     fun toggleNotifications(enabled: Boolean) {
-        _uiState.update { it.copy(isNotificationsEnabled = enabled) }
+        viewModelScope.launch {
+            userPreferencesRepository.setNotificationsEnabled(enabled)
+            if (enabled) {
+                reminderScheduler?.rescheduleAllFutureReminders()
+            } else {
+                reminderScheduler?.cancelAllReminders()
+            }
+        }
     }
 
-    fun setDarkThemeOption(option: String) {
-        _uiState.update { it.copy(darkThemeOption = option) }
+    fun setThemePreference(theme: ThemePreference) {
+        viewModelScope.launch {
+            userPreferencesRepository.setThemePreference(theme)
+        }
     }
 }

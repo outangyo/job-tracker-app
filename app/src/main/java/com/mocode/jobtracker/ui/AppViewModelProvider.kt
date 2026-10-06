@@ -6,7 +6,9 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.mocode.jobtracker.JobTrackerApplication
+import com.mocode.jobtracker.data.preferences.UserPreferencesRepository
 import com.mocode.jobtracker.data.repository.JobRepository
+import com.mocode.jobtracker.notification.ReminderScheduler
 import com.mocode.jobtracker.ui.addapplication.AddEditApplicationViewModel
 import com.mocode.jobtracker.ui.applicationdetail.ApplicationDetailViewModel
 import com.mocode.jobtracker.ui.applications.ApplicationsViewModel
@@ -24,17 +26,22 @@ object AppViewModelProvider {
         initializer {
             AddEditApplicationViewModel(
                 repository = jobRepository(),
-                savedStateHandle = createSavedStateHandle()
+                savedStateHandle = createSavedStateHandle(),
+                reminderScheduler = reminderScheduler()
             )
         }
         initializer {
             ApplicationDetailViewModel(
                 repository = jobRepository(),
-                savedStateHandle = createSavedStateHandle()
+                savedStateHandle = createSavedStateHandle(),
+                reminderScheduler = reminderScheduler()
             )
         }
         initializer {
-            SettingsViewModel()
+            SettingsViewModel(
+                userPreferencesRepository = userPreferencesRepository(),
+                reminderScheduler = reminderScheduler()
+            )
         }
     }
 }
@@ -44,3 +51,9 @@ fun CreationExtras.jobTrackerApplication(): JobTrackerApplication =
 
 fun CreationExtras.jobRepository(): JobRepository =
     jobTrackerApplication().repository
+
+fun CreationExtras.userPreferencesRepository(): UserPreferencesRepository =
+    jobTrackerApplication().userPreferencesRepository
+
+fun CreationExtras.reminderScheduler(): ReminderScheduler =
+    jobTrackerApplication().reminderScheduler
